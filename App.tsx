@@ -16,8 +16,8 @@ const Home: React.FC = () => {
         Net to Seller Calculator
       </h1>
 
-      {/* Button moved up as requested */}
-      <div className="mb-10 mt-4">
+      {/* Primary CTA moved above info bar */}
+      <div className="mt-6 mb-10">
         <Link 
           to="/calculate"
           className="bg-brand-teal hover:bg-[#58b7b4] text-white px-10 py-5 rounded-full text-lg font-display font-bold shadow-xl transition-transform hover:scale-105 inline-block"

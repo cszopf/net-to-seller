@@ -1,3 +1,4 @@
+
 export default async function handler(req: any, res: any) {
   try {
     if (req.method !== "POST") {
@@ -15,6 +16,7 @@ export default async function handler(req: any, res: any) {
       return res.status(500).json({ error: "ATTOM_API_KEY not set" });
     }
 
+    // Build the URL for the expanded profile API
     const url =
       "https://api.developer.attomdata.com/propertyapi/v1.0.0/property/expandedprofile" +
       `?address1=${encodeURIComponent(address1)}` +
@@ -38,8 +40,27 @@ export default async function handler(req: any, res: any) {
     }
 
     const data = JSON.parse(text);
+    
+    // Normalize data structure for the frontend
+    const p = data?.property?.[0] ?? data?.property ?? null;
+    if (!p) {
+      return res.status(404).json({ error: "No property found at this address", data: null });
+    }
 
-    return res.status(200).json({ ok: true, data });
+    const apn = p?.identifier?.apn || p?.identifier?.apnOrig || p?.parcel?.apn || null;
+    const county = p?.area?.countyName || p?.area?.countrySecSubdName || null;
+    const taxYear = p?.assessment?.tax?.taxYear || p?.tax?.taxYear || null;
+    const taxAmt = p?.assessment?.tax?.taxAmt || p?.tax?.taxAmt || null;
+    const assessedTotal = p?.assessment?.assessed?.assdTtlValue || null;
+
+    return res.status(200).json({ 
+      ok: true, 
+      source: "ATTOM",
+      apn,
+      county,
+      tax: { year: taxYear ? Number(taxYear) : null, annual: taxAmt ? Number(taxAmt) : null },
+      assessed: { total: assessedTotal ? Number(assessedTotal) : null }
+    });
   } catch (e: any) {
     return res.status(500).json({ error: e.message });
   }
