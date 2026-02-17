@@ -15,6 +15,7 @@ export const INITIAL_DATA: NetSheetData = {
   state: 'OH',
   zip: '',
   county: 'Franklin',
+  parcelId: '',
   propertyType: 'Single Family',
   salePrice: 0,
   salePrice2: 0,
@@ -37,8 +38,9 @@ export const INITIAL_DATA: NetSheetData = {
   hoaTransferFee: 0,
   taxInputMethod: 'annual',
   taxValue: 0,
+  taxYear: new Date().getFullYear() - 1,
   otherCosts: [],
-  isHomeownersPolicy: true, // Default to premium product
+  isHomeownersPolicy: true,
   isReissueRate: false,
   priorPolicyAmount: 0,
 };
@@ -68,10 +70,9 @@ export const DEFAULT_FEE_SCHEDULE: FeeSchedule = {
   docPrepFee: 75,
   courierFee: 40,
   releaseTrackingFee: 35,
-  transferTaxRate: 2.0, // Default to Franklin County rate
+  transferTaxRate: 2.0,
 };
 
-// PR-1 Rate Tiers per $1,000
 export const OHIO_TITLE_TIERS = [
   { limit: 250000, rate: 5.80 },
   { limit: 500000, rate: 4.10 },

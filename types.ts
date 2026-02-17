@@ -17,6 +17,7 @@ export interface NetSheetData {
   state: string;
   zip: string;
   county: string;
+  parcelId: string;
   propertyType: string;
   salePrice: number;
   salePrice2?: number;
@@ -39,8 +40,9 @@ export interface NetSheetData {
   hoaTransferFee: number;
   taxInputMethod: 'annual' | 'monthly';
   taxValue: number;
+  taxYear?: number;
+  assessedTotal?: number;
   otherCosts: OtherCost[];
-  // New Title Fields
   isHomeownersPolicy: boolean;
   isReissueRate: boolean;
   priorPolicyAmount: number;
