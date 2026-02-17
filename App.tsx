@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom';
 import CalculatorWizard from './components/CalculatorWizard';
 import ResultsPage from './components/ResultsPage';
@@ -16,7 +15,6 @@ const Home: React.FC = () => {
         Net to Seller Calculator
       </h1>
 
-      {/* Primary CTA moved above info bar */}
       <div className="mt-6 mb-10">
         <Link 
           to="/calculate"
@@ -63,9 +61,27 @@ const Home: React.FC = () => {
 
 const App: React.FC = () => {
   const [data, setData] = useState<NetSheetData>(INITIAL_DATA);
+  const [isApiHealthy, setIsApiHealthy] = useState<boolean>(true);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     return sessionStorage.getItem('adminAuth') === 'true';
   });
+
+  // Perform a silent health check on app startup
+  useEffect(() => {
+    const checkHealth = async () => {
+      try {
+        const response = await fetch('/api/health');
+        if (!response.ok) throw new Error('API not healthy');
+        const json = await response.json();
+        if (!json.ok) throw new Error('API reported error');
+        setIsApiHealthy(true);
+      } catch (err) {
+        console.warn('API Health Check Failed:', err);
+        setIsApiHealthy(false);
+      }
+    };
+    checkHealth();
+  }, []);
 
   const handleLogin = () => {
     setIsAuthenticated(true);
@@ -90,7 +106,7 @@ const App: React.FC = () => {
           />
           <Route 
             path="/admin" 
-            element={isAuthenticated ? <AdminPanel /> : <Navigate to="/login" replace />} 
+            element={isAuthenticated ? <AdminPanel isApiHealthy={isApiHealthy} /> : <Navigate to="/login" replace />} 
           />
         </Routes>
       </Layout>

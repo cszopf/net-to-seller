@@ -1,17 +1,35 @@
-
 import React, { useState } from 'react';
 import { DEFAULT_FEE_SCHEDULE } from '../constants';
 
-const AdminPanel: React.FC = () => {
+interface AdminPanelProps {
+  isApiHealthy?: boolean;
+}
+
+const AdminPanel: React.FC<AdminPanelProps> = ({ isApiHealthy = true }) => {
   const [schedule, setSchedule] = useState(DEFAULT_FEE_SCHEDULE);
 
   const save = () => {
-    // In a real app, this would hit an API
     alert('Fee schedule updated successfully!');
   };
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-12">
+      {!isApiHealthy && (
+        <div className="mb-8 p-6 bg-red-50 border-l-4 border-red-500 rounded-r-2xl shadow-sm animate-pulse">
+          <div className="flex items-center">
+            <svg className="w-6 h-6 text-red-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <div>
+              <h3 className="text-red-800 font-bold uppercase tracking-tight text-sm">Deployment Critical Error</h3>
+              <p className="text-red-700 text-xs mt-1">
+                API routes are not deployed or are unreachable. Check Vercel Root Directory and build settings (must be ./ and npm run build).
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-3xl font-display font-bold text-brand-primary">Admin Settings</h1>
         <button 
