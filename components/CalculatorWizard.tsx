@@ -16,6 +16,7 @@ const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
   const [addressError, setAddressError] = useState<string | null>(null);
   const [attomStatus, setAttomStatus] = useState<AttomStatus>('idle');
   const [attomError, setAttomError] = useState<string | null>(null);
+  const [attomDebug, setAttomDebug] = useState<string | null>(null);
   const [useTaxEstimate, setUseTaxEstimate] = useState(true);
   
   const navigate = useNavigate();
@@ -25,6 +26,7 @@ const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
   const fetchAttom = async (address1: string, address2: string) => {
     setAttomStatus("loading");
     setAttomError(null);
+    setAttomDebug(`${address1} | ${address2}`);
 
     try {
       const r = await fetch("/api/attom/property", {
@@ -37,13 +39,12 @@ const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
 
       if (!r.ok) {
         setAttomStatus("error");
-        setAttomError(json?.error || "ATTOM lookup failed");
+        setAttomError(json?.error || "Property data unavailable. Enter details manually.");
         return null;
       }
 
       setAttomStatus("success");
       
-      // Update data with normalized results
       setData((f) => ({
         ...f,
         county: json.county || f.county,
@@ -62,7 +63,6 @@ const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
   };
 
   useEffect(() => {
-    // Check for Maps initialization
     if (step === 1 && autocompleteInputRef.current && (window as any).google) {
       try {
         autocompleteRef.current = new (window as any).google.maps.places.Autocomplete(autocompleteInputRef.current, {
@@ -93,7 +93,6 @@ const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
               }
             }
 
-            // Ohio Specific Validation
             if (state && state !== 'OH') {
               setAddressError('Out of State: This tool only supports Ohio properties. Please contact info@worldclasstitle.com or call us at (614) 848-4000 for assistance.');
               setData(prev => ({ ...prev, address: place.formatted_address || '', state }));
@@ -101,25 +100,27 @@ const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
             }
 
             setAddressError(null);
-            const street1 = `${streetNumber} ${route}`.trim();
-            const street2 = `${city}, ${state || 'OH'} ${zip}`;
+            
+            // Normalize Layer
+            const address1 = `${streetNumber} ${route}`.trim();
+            const address2 = `${city}, ${state || 'OH'} ${zip}`.trim();
+            
             const matchedCounty = OHIO_COUNTIES.find(c => c.toLowerCase() === county.toLowerCase()) || 'Other';
 
             setData(prev => ({
               ...prev,
-              address: place.formatted_address || street1,
+              address: place.formatted_address || address1,
               city,
               state: state || 'OH',
               zip,
               county: matchedCounty
             }));
 
-            // Trigger ATTOM Lookup
-            await fetchAttom(street1, street2);
+            await fetchAttom(address1, address2);
           }
         });
       } catch (e) {
-        console.warn('Maps Autocomplete error. This may be due to restricted API key referrers.', e);
+        console.warn('Maps Autocomplete error.', e);
       }
     }
   }, [step, setData]);
@@ -133,6 +134,7 @@ const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
     setAttomStatus('idle');
     setAttomError(null);
     setAddressError(null);
+    setAttomDebug(null);
   };
 
   const handleNext = () => {
@@ -164,9 +166,18 @@ const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
     return true;
   };
 
+  const formatAsUSD = (value: number | undefined): string => {
+    if (value === undefined || value === 0) return '';
+    return new Intl.NumberFormat('en-US').format(value);
+  };
+
+  const handlePriceInputChange = (field: 'salePrice' | 'salePrice2' | 'salePrice3', value: string) => {
+    const numericValue = parseFloat(value.replace(/,/g, '')) || 0;
+    updateData({ [field]: numericValue });
+  };
+
   return (
     <div className="max-w-2xl mx-auto px-4 py-10">
-      {/* Progress Indicator */}
       <div className="mb-8">
         <div className="flex justify-between items-center mb-2">
           <span className="text-sm font-bold text-brand-primary uppercase tracking-wider">Step {step} of 5</span>
@@ -181,7 +192,6 @@ const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
       </div>
 
       <div className="bg-white p-8 rounded-[40px] shadow-2xl shadow-slate-200/50 border border-slate-100 min-h-[450px] flex flex-col">
-        {/* Step Content */}
         <div className="flex-grow">
           {step === 1 && (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -189,10 +199,10 @@ const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
                 <h2 className="text-2xl font-display font-bold text-brand-primary uppercase tracking-tight">Property Basics</h2>
                 <div className="flex flex-wrap gap-2">
                    <span className={`px-2 py-1 rounded-[6px] text-[9px] font-bold uppercase tracking-wider ${(window as any).google?.maps ? 'bg-green-50 text-green-600 border border-green-100' : 'bg-red-50 text-red-500 border border-red-100'}`}>
-                     Maps: {(window as any).google?.maps ? 'Connected' : 'Referer Error'}
+                     Maps: {(window as any).google?.maps ? 'Connected' : 'Offline'}
                    </span>
-                   <span className={`px-2 py-1 rounded-[6px] text-[9px] font-bold uppercase tracking-wider ${attomStatus === 'success' ? 'bg-green-50 text-green-600 border border-green-100' : attomStatus === 'loading' ? 'bg-blue-50 text-blue-600 border border-blue-100' : attomStatus === 'error' ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-slate-50 text-slate-400 border border-slate-100'}`}>
-                     ATTOM: {attomStatus}
+                   <span className={`px-2 py-1 rounded-[6px] text-[9px] font-bold uppercase tracking-wider ${attomStatus === 'success' ? 'bg-green-50 text-green-600 border border-green-100' : attomStatus === 'loading' ? 'bg-blue-50 text-blue-600 border border-blue-100' : attomStatus === 'error' ? 'bg-amber-50 text-amber-600 border border-amber-100' : 'bg-slate-50 text-slate-400 border border-slate-100'}`}>
+                     ATTOM: {attomStatus === 'error' ? 'Unavailable' : attomStatus}
                    </span>
                 </div>
               </div>
@@ -218,11 +228,21 @@ const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
                       }}
                     />
                   </div>
+                  
+                  {/* ATTOM Error State (Amber Warning) */}
+                  {attomStatus === 'error' && (
+                    <div className="mt-4 p-4 bg-amber-50 border-l-4 border-amber-500 text-amber-800 text-xs font-bold rounded-r-2xl animate-in slide-in-from-top-1 shadow-sm flex items-center">
+                      <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd"></path></svg>
+                      {attomError}
+                    </div>
+                  )}
+
                   {addressError && (
                     <div className="mt-4 p-5 bg-red-50 border-l-4 border-red-500 text-red-700 text-xs font-bold rounded-r-2xl animate-in slide-in-from-top-1 shadow-sm">
                       {addressError}
                     </div>
                   )}
+                  
                   {attomStatus === 'loading' && (
                     <div className="mt-2 text-[11px] text-brand-primary font-bold flex items-center animate-pulse">
                       <svg className="animate-spin h-3 w-3 mr-2" viewBox="0 0 24 24">
@@ -230,6 +250,13 @@ const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                       </svg>
                       Finding property record...
+                    </div>
+                  )}
+
+                  {/* Debug Line (Invisible in prod if desired, useful for diagnosing normalization) */}
+                  {attomDebug && (
+                    <div className="mt-2 text-[9px] text-slate-300 font-mono uppercase tracking-tighter opacity-50">
+                      ATTOM Search: {attomDebug}
                     </div>
                   )}
                 </div>
@@ -260,16 +287,22 @@ const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
                 <div className="flex justify-between items-center">
                   <div className="flex items-center gap-1">
                     {attomStatus === 'success' && (
-                       <span className="text-[10px] font-bold text-green-600 uppercase bg-green-50 px-2 py-0.5 rounded border border-green-100 shadow-sm">Data Source: ATTOM</span>
+                       <span className="text-[10px] font-bold text-green-600 uppercase bg-green-50 px-2 py-0.5 rounded border border-green-100 shadow-sm flex items-center">
+                         <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"></path></svg>
+                         Verified via ATTOM
+                       </span>
                     )}
                   </div>
                   <button 
-                    onClick={() => fetchAttom(data.address.split(',')[0], `${data.city}, ${data.state} ${data.zip}`)}
+                    onClick={() => {
+                      const parts = data.address.split(',');
+                      fetchAttom(parts[0], parts.slice(1).join(',').trim());
+                    }}
                     className="text-[10px] font-bold text-brand-primary flex items-center hover:underline uppercase tracking-wider"
                     disabled={!data.address || attomStatus === 'loading'}
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className={`h-3 w-3 mr-1 ${attomStatus === 'loading' ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                    Refresh Data
+                    Refresh Records
                   </button>
                 </div>
                 
@@ -294,26 +327,32 @@ const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
                       <div className="flex justify-between mb-1">
                         <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Scenario A (Target)</label>
                       </div>
-                      <input 
-                        type="number" 
-                        placeholder="0.00"
-                        className="w-full p-4 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-brand-teal/20 focus:border-brand-teal outline-none text-3xl font-bold text-brand-primary"
-                        value={data.salePrice || ''}
-                        onChange={e => updateData({ salePrice: parseFloat(e.target.value) || 0 })}
-                      />
+                      <div className="relative group">
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-3xl font-bold text-slate-300 group-focus-within:text-brand-teal transition-colors">$</span>
+                        <input 
+                          type="text" 
+                          placeholder="0"
+                          className="w-full p-4 pl-10 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-brand-teal/20 focus:border-brand-teal outline-none text-3xl font-bold text-brand-primary transition-all"
+                          value={formatAsUSD(data.salePrice)}
+                          onChange={e => handlePriceInputChange('salePrice', e.target.value)}
+                        />
+                      </div>
                     </div>
 
                     {data.showComparisons && (
                       <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
                         <div>
                           <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 tracking-wider">Scenario B</label>
-                          <input 
-                            type="number" 
-                            placeholder="Price"
-                            className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-teal/10 outline-none font-bold text-slate-700"
-                            value={data.salePrice2 || ''}
-                            onChange={e => updateData({ salePrice2: parseFloat(e.target.value) || 0 })}
-                          />
+                          <div className="relative group">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-slate-300 group-focus-within:text-brand-teal transition-colors">$</span>
+                            <input 
+                              type="text" 
+                              placeholder="0"
+                              className="w-full p-3 pl-7 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-teal/10 outline-none font-bold text-slate-700 transition-all"
+                              value={formatAsUSD(data.salePrice2)}
+                              onChange={e => handlePriceInputChange('salePrice2', e.target.value)}
+                            />
+                          </div>
                         </div>
                         <div>
                           <div className="flex justify-between items-center mb-1">
@@ -325,13 +364,16 @@ const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
                               CLEAR
                             </button>
                           </div>
-                          <input 
-                            type="number" 
-                            placeholder="Price"
-                            className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-teal/10 outline-none font-bold text-slate-700"
-                            value={data.salePrice3 || ''}
-                            onChange={e => updateData({ salePrice3: parseFloat(e.target.value) || 0 })}
-                          />
+                          <div className="relative group">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-slate-300 group-focus-within:text-brand-teal transition-colors">$</span>
+                            <input 
+                              type="text" 
+                              placeholder="0"
+                              className="w-full p-3 pl-7 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-teal/10 outline-none font-bold text-slate-700 transition-all"
+                              value={formatAsUSD(data.salePrice3)}
+                              onChange={e => handlePriceInputChange('salePrice3', e.target.value)}
+                            />
+                          </div>
                         </div>
                       </div>
                     )}
@@ -386,12 +428,15 @@ const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
                         </div>
                         <div className="space-y-1">
                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Approx. Balance</label>
-                           <input 
-                             type="number" 
-                             className="w-full p-3 border border-slate-200 rounded-xl text-sm font-bold text-brand-primary"
-                             value={payoff.amount || ''}
-                             onChange={e => updatePayoff(payoff.id, { amount: parseFloat(e.target.value) || 0 })}
-                           />
+                           <div className="relative group">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-brand-teal transition-colors font-bold">$</span>
+                              <input 
+                                type="text" 
+                                className="w-full p-3 pl-7 border border-slate-200 rounded-xl text-sm font-bold text-brand-primary focus:ring-2 focus:ring-brand-teal/10 outline-none"
+                                value={formatAsUSD(payoff.amount)}
+                                onChange={e => updatePayoff(payoff.id, { amount: parseFloat(e.target.value.replace(/,/g, '')) || 0 })}
+                              />
+                           </div>
                         </div>
                       </div>
                     </div>
@@ -444,10 +489,13 @@ const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
                     <div className="relative inline-block w-full max-w-[200px]">
                       {data.commissionType === 'flat' && <span className="absolute left-0 top-1/2 -translate-y-1/2 text-3xl font-bold text-slate-300">$</span>}
                       <input 
-                        type="number" 
+                        type="text" 
                         className={`w-full p-2 bg-transparent border-b-2 border-slate-200 text-center text-4xl font-bold text-brand-primary focus:border-brand-teal outline-none transition-colors ${data.commissionType === 'flat' ? 'pl-8' : ''}`}
-                        value={data.commissionValue || ''}
-                        onChange={e => updateData({ commissionValue: parseFloat(e.target.value) || 0 })}
+                        value={data.commissionType === 'flat' ? formatAsUSD(data.commissionValue) : data.commissionValue || ''}
+                        onChange={e => {
+                           const raw = e.target.value.replace(/,/g, '');
+                           updateData({ commissionValue: parseFloat(raw) || 0 });
+                        }}
                       />
                       {data.commissionType === 'percent' && <span className="absolute right-0 top-1/2 -translate-y-1/2 text-3xl font-bold text-slate-300">%</span>}
                     </div>
@@ -463,30 +511,39 @@ const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
               <div className="grid grid-cols-1 gap-4">
                 <div className="bg-slate-50 p-6 rounded-[32px] border border-slate-100">
                   <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">Credit to Buyer ($)</label>
-                  <input 
-                    type="number" 
-                    className="w-full p-2 bg-transparent border-b border-slate-200 focus:border-brand-teal outline-none font-bold text-2xl text-slate-800"
-                    value={data.concessions || ''}
-                    onChange={e => updateData({ concessions: parseFloat(e.target.value) || 0 })}
-                  />
+                  <div className="relative group">
+                    <span className="absolute left-0 top-1/2 -translate-y-1/2 text-2xl font-bold text-slate-300 group-focus-within:text-brand-teal transition-colors">$</span>
+                    <input 
+                      type="text" 
+                      className="w-full p-2 pl-6 bg-transparent border-b border-slate-200 focus:border-brand-teal outline-none font-bold text-2xl text-slate-800"
+                      value={formatAsUSD(data.concessions)}
+                      onChange={e => updateData({ concessions: parseFloat(e.target.value.replace(/,/g, '')) || 0 })}
+                    />
+                  </div>
                 </div>
                 <div className="bg-slate-50 p-6 rounded-[32px] border border-slate-100">
                   <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">Home Warranty ($)</label>
-                  <input 
-                    type="number" 
-                    className="w-full p-2 bg-transparent border-b border-slate-200 focus:border-brand-teal outline-none font-bold text-2xl text-slate-800"
-                    value={data.homeWarranty || ''}
-                    onChange={e => updateData({ homeWarranty: parseFloat(e.target.value) || 0 })}
-                  />
+                  <div className="relative group">
+                    <span className="absolute left-0 top-1/2 -translate-y-1/2 text-2xl font-bold text-slate-300 group-focus-within:text-brand-teal transition-colors">$</span>
+                    <input 
+                      type="text" 
+                      className="w-full p-2 pl-6 bg-transparent border-b border-slate-200 focus:border-brand-teal outline-none font-bold text-2xl text-slate-800"
+                      value={formatAsUSD(data.homeWarranty)}
+                      onChange={e => updateData({ homeWarranty: parseFloat(e.target.value.replace(/,/g, '')) || 0 })}
+                    />
+                  </div>
                 </div>
                 <div className="bg-slate-50 p-6 rounded-[32px] border border-slate-100">
                   <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">Repair Credits ($)</label>
-                  <input 
-                    type="number" 
-                    className="w-full p-2 bg-transparent border-b border-slate-200 focus:border-brand-teal outline-none font-bold text-2xl text-slate-800"
-                    value={data.repairCredits || ''}
-                    onChange={e => updateData({ repairCredits: parseFloat(e.target.value) || 0 })}
-                  />
+                  <div className="relative group">
+                    <span className="absolute left-0 top-1/2 -translate-y-1/2 text-2xl font-bold text-slate-300 group-focus-within:text-brand-teal transition-colors">$</span>
+                    <input 
+                      type="text" 
+                      className="w-full p-2 pl-6 bg-transparent border-b border-slate-200 focus:border-brand-teal outline-none font-bold text-2xl text-slate-800"
+                      value={formatAsUSD(data.repairCredits)}
+                      onChange={e => updateData({ repairCredits: parseFloat(e.target.value.replace(/,/g, '')) || 0 })}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -528,12 +585,15 @@ const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
                   {data.isReissueRate && (
                     <div className="animate-in slide-in-from-top-2 duration-300 pt-3">
                       <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 tracking-widest">Prior Policy Amount ($)</label>
-                      <input 
-                        type="number" 
-                        className="w-full p-4 border border-slate-200 rounded-2xl text-lg font-bold text-brand-primary bg-white outline-none focus:ring-2 focus:ring-brand-teal/10"
-                        value={data.priorPolicyAmount || ''}
-                        onChange={e => updateData({ priorPolicyAmount: parseFloat(e.target.value) || 0 })}
-                      />
+                      <div className="relative group">
+                         <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-bold text-slate-300 group-focus-within:text-brand-teal transition-colors">$</span>
+                         <input 
+                           type="text" 
+                           className="w-full p-4 pl-10 border border-slate-200 rounded-2xl text-lg font-bold text-brand-primary bg-white outline-none focus:ring-2 focus:ring-brand-teal/10"
+                           value={formatAsUSD(data.priorPolicyAmount)}
+                           onChange={e => updateData({ priorPolicyAmount: parseFloat(e.target.value.replace(/,/g, '')) || 0 })}
+                         />
+                      </div>
                     </div>
                   )}
                 </div>
@@ -568,12 +628,13 @@ const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
                   </button>
                 </div>
 
-                <div className="relative">
+                <div className="relative group">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-2xl font-bold text-slate-300 group-focus-within:text-brand-teal transition-colors">$</span>
                   <input 
-                    type="number" 
-                    className="w-full p-5 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-brand-teal/20 text-2xl font-bold text-slate-800 bg-white"
-                    value={data.taxValue || ''}
-                    onChange={e => updateData({ taxValue: parseFloat(e.target.value) || 0 })}
+                    type="text" 
+                    className="w-full p-5 pl-10 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-brand-teal/20 text-2xl font-bold text-slate-800 bg-white"
+                    value={formatAsUSD(data.taxValue)}
+                    onChange={e => updateData({ taxValue: parseFloat(e.target.value.replace(/,/g, '')) || 0 })}
                   />
                   {data.taxYear && (
                     <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded border uppercase tracking-tighter">Year: {data.taxYear}</span>
@@ -587,27 +648,32 @@ const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
                   {attomStatus === 'success' && (
                      <p className="text-[9px] text-green-600 font-bold uppercase flex items-center">
                        <svg className="h-3 w-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"></path></svg>
-                       Verified via ATTOM Data
+                       Verified Record Sync
                      </p>
                   )}
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <div className="bg-slate-50 p-5 rounded-[32px] border border-slate-100 shadow-sm">
+                <div className="bg-slate-50 p-5 rounded-[32px] border border-slate-100 shadow-sm group">
                   <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 tracking-widest">Monthly HOA</label>
-                  <input type="number" className="w-full bg-transparent p-1 border-b border-slate-300 outline-none font-bold text-lg" value={data.hoaMonthly || ''} onChange={e => updateData({ hoaMonthly: parseFloat(e.target.value) || 0 })} />
+                  <div className="relative">
+                    <span className="absolute left-0 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-brand-teal font-bold">$</span>
+                    <input type="text" className="w-full bg-transparent pl-4 p-1 border-b border-slate-300 outline-none font-bold text-lg" value={formatAsUSD(data.hoaMonthly)} onChange={e => updateData({ hoaMonthly: parseFloat(e.target.value.replace(/,/g, '')) || 0 })} />
+                  </div>
                 </div>
-                <div className="bg-slate-50 p-5 rounded-[32px] border border-slate-100 shadow-sm">
+                <div className="bg-slate-50 p-5 rounded-[32px] border border-slate-100 shadow-sm group">
                   <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 tracking-widest">HOA Transfer</label>
-                  <input type="number" className="w-full bg-transparent p-1 border-b border-slate-300 outline-none font-bold text-lg" value={data.hoaTransferFee || ''} onChange={e => updateData({ hoaTransferFee: parseFloat(e.target.value) || 0 })} />
+                  <div className="relative">
+                    <span className="absolute left-0 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-brand-teal font-bold">$</span>
+                    <input type="text" className="w-full bg-transparent pl-4 p-1 border-b border-slate-300 outline-none font-bold text-lg" value={formatAsUSD(data.hoaTransferFee)} onChange={e => updateData({ hoaTransferFee: parseFloat(e.target.value.replace(/,/g, '')) || 0 })} />
+                  </div>
                 </div>
               </div>
             </div>
           )}
         </div>
 
-        {/* Navigation Buttons */}
         <div className="mt-10 flex space-x-3">
           {step > 1 && (
             <button onClick={handleBack} className="flex-1 py-5 border border-slate-200 text-slate-500 font-display font-bold rounded-[24px] hover:bg-slate-50 transition-all uppercase text-sm tracking-widest">Back</button>
