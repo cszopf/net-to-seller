@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { NetSheetData, MortgagePayoff, OtherCost } from '../types';
-import { OHIO_COUNTIES, PROPERTY_TYPES } from '../constants';
+import { NetSheetData, MortgagePayoff } from '../types';
+import { OHIO_COUNTIES } from '../constants';
 
 interface Props {
   data: NetSheetData;
@@ -16,7 +16,7 @@ const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
   const [addressError, setAddressError] = useState<string | null>(null);
   const [attomStatus, setAttomStatus] = useState<AttomStatus>('idle');
   const [attomError, setAttomError] = useState<string | null>(null);
-  const [attomDebug, setAttomDebug] = useState<string | null>(null);
+  const [attomDebug, setAttomDebug] = useState<{ a1: string; a2: string } | null>(null);
   const [useTaxEstimate, setUseTaxEstimate] = useState(true);
   
   const navigate = useNavigate();
@@ -26,7 +26,7 @@ const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
   const fetchAttom = async (address1: string, address2: string) => {
     setAttomStatus("loading");
     setAttomError(null);
-    setAttomDebug(`${address1} | ${address2}`);
+    setAttomDebug({ a1: address1, a2: address2 });
 
     try {
       const r = await fetch("/api/attom/property", {
@@ -35,16 +35,23 @@ const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
         body: JSON.stringify({ address1, address2 }),
       });
 
+      // Handle non-JSON or other errors
+      const contentType = r.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error("Invalid server response format");
+      }
+
       const json = await r.json();
 
       if (!r.ok) {
         setAttomStatus("error");
-        setAttomError(json?.error || "Property data unavailable. Enter details manually.");
+        setAttomError(json?.message || "Property data unavailable. Enter details manually.");
         return null;
       }
 
       setAttomStatus("success");
       
+      // Update data with normalized results
       setData((f) => ({
         ...f,
         county: json.county || f.county,
@@ -57,7 +64,8 @@ const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
       return json;
     } catch (err) {
       setAttomStatus("error");
-      setAttomError("Property record search unavailable.");
+      setAttomError("Property data unavailable. Enter details manually.");
+      console.error("ATTOM Lookup Error:", err);
       return null;
     }
   };
@@ -93,6 +101,7 @@ const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
               }
             }
 
+            // Ohio Specific Validation
             if (state && state !== 'OH') {
               setAddressError('Out of State: This tool only supports Ohio properties. Please contact info@worldclasstitle.com or call us at (614) 848-4000 for assistance.');
               setData(prev => ({ ...prev, address: place.formatted_address || '', state }));
@@ -101,22 +110,25 @@ const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
 
             setAddressError(null);
             
-            // Normalize Layer
-            const address1 = `${streetNumber} ${route}`.trim();
-            const address2 = `${city}, ${state || 'OH'} ${zip}`.trim();
+            // STRICT NORMALIZATION LAYER
+            // address1 = "{street_number} {route}"
+            // address2 = "{city}, {state} {zip}"
+            const cleanA1 = `${streetNumber} ${route}`.trim().replace(/\s+/g, ' ');
+            const cleanA2 = `${city}, ${state || 'OH'} ${zip}`.trim().replace(/\s+/g, ' ');
             
             const matchedCounty = OHIO_COUNTIES.find(c => c.toLowerCase() === county.toLowerCase()) || 'Other';
 
             setData(prev => ({
               ...prev,
-              address: place.formatted_address || address1,
+              address: place.formatted_address || cleanA1,
               city,
               state: state || 'OH',
               zip,
               county: matchedCounty
             }));
 
-            await fetchAttom(address1, address2);
+            // Trigger ATTOM Lookup with normalized components
+            await fetchAttom(cleanA1, cleanA2);
           }
         });
       } catch (e) {
@@ -178,6 +190,7 @@ const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-10">
+      {/* Progress Indicator */}
       <div className="mb-8">
         <div className="flex justify-between items-center mb-2">
           <span className="text-sm font-bold text-brand-primary uppercase tracking-wider">Step {step} of 5</span>
@@ -192,6 +205,7 @@ const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
       </div>
 
       <div className="bg-white p-8 rounded-[40px] shadow-2xl shadow-slate-200/50 border border-slate-100 min-h-[450px] flex flex-col">
+        {/* Step Content */}
         <div className="flex-grow">
           {step === 1 && (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -202,7 +216,7 @@ const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
                      Maps: {(window as any).google?.maps ? 'Connected' : 'Offline'}
                    </span>
                    <span className={`px-2 py-1 rounded-[6px] text-[9px] font-bold uppercase tracking-wider ${attomStatus === 'success' ? 'bg-green-50 text-green-600 border border-green-100' : attomStatus === 'loading' ? 'bg-blue-50 text-blue-600 border border-blue-100' : attomStatus === 'error' ? 'bg-amber-50 text-amber-600 border border-amber-100' : 'bg-slate-50 text-slate-400 border border-slate-100'}`}>
-                     ATTOM: {attomStatus === 'error' ? 'Unavailable' : attomStatus}
+                     ATTOM: {attomStatus === 'error' ? 'Error' : attomStatus === 'success' ? 'Connected' : attomStatus}
                    </span>
                 </div>
               </div>
@@ -229,7 +243,7 @@ const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
                     />
                   </div>
                   
-                  {/* ATTOM Error State (Amber Warning) */}
+                  {/* AMBER WARNING UI */}
                   {attomStatus === 'error' && (
                     <div className="mt-4 p-4 bg-amber-50 border-l-4 border-amber-500 text-amber-800 text-xs font-bold rounded-r-2xl animate-in slide-in-from-top-1 shadow-sm flex items-center">
                       <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd"></path></svg>
@@ -253,10 +267,10 @@ const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
                     </div>
                   )}
 
-                  {/* Debug Line (Invisible in prod if desired, useful for diagnosing normalization) */}
+                  {/* LIGHTWEIGHT DEBUG LINE */}
                   {attomDebug && (
-                    <div className="mt-2 text-[9px] text-slate-300 font-mono uppercase tracking-tighter opacity-50">
-                      ATTOM Search: {attomDebug}
+                    <div className="mt-2 text-[9px] text-slate-300 font-mono uppercase tracking-tighter opacity-50 select-none">
+                      ATTOM Search: {attomDebug.a1} | {attomDebug.a2}
                     </div>
                   )}
                 </div>
@@ -289,14 +303,13 @@ const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
                     {attomStatus === 'success' && (
                        <span className="text-[10px] font-bold text-green-600 uppercase bg-green-50 px-2 py-0.5 rounded border border-green-100 shadow-sm flex items-center">
                          <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"></path></svg>
-                         Verified via ATTOM
+                         Verified Record Sync
                        </span>
                     )}
                   </div>
                   <button 
                     onClick={() => {
-                      const parts = data.address.split(',');
-                      fetchAttom(parts[0], parts.slice(1).join(',').trim());
+                      if (attomDebug) fetchAttom(attomDebug.a1, attomDebug.a2);
                     }}
                     className="text-[10px] font-bold text-brand-primary flex items-center hover:underline uppercase tracking-wider"
                     disabled={!data.address || attomStatus === 'loading'}
@@ -306,6 +319,7 @@ const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
                   </button>
                 </div>
                 
+                {/* Pricing scenarios section */}
                 <div className="pt-4 p-6 bg-slate-50 rounded-[32px] border border-slate-100">
                   <div className="flex items-center justify-between mb-4">
                     <div>
@@ -648,7 +662,7 @@ const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
                   {attomStatus === 'success' && (
                      <p className="text-[9px] text-green-600 font-bold uppercase flex items-center">
                        <svg className="h-3 w-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"></path></svg>
-                       Verified Record Sync
+                       Verified Sync Complete
                      </p>
                   )}
                 </div>
@@ -674,6 +688,7 @@ const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
           )}
         </div>
 
+        {/* Navigation Buttons */}
         <div className="mt-10 flex space-x-3">
           {step > 1 && (
             <button onClick={handleBack} className="flex-1 py-5 border border-slate-200 text-slate-500 font-display font-bold rounded-[24px] hover:bg-slate-50 transition-all uppercase text-sm tracking-widest">Back</button>

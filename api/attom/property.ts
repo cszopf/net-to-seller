@@ -1,19 +1,25 @@
 
-export default async function handler(req: any, res: any) {
-  try {
-    if (req.method !== "POST") {
-      return res.status(405).json({ error: "Method not allowed" });
-    }
+import type { VercelRequest, VercelResponse } from '@vercel/node';
 
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // 1. Validate Method
+  if (req.method !== "POST") {
+    return res.status(405).json({ status: "error", message: "Method not allowed" });
+  }
+
+  try {
     const { address1, address2 } = req.body || {};
 
+    // 2. Validate Payload
     if (!address1 || !address2) {
-      return res.status(400).json({ error: "Missing address1 or address2" });
+      return res.status(400).json({ status: "error", message: "Missing address1 or address2" });
     }
 
+    // 3. Validate API Key
     const apiKey = process.env.ATTOM_API_KEY;
     if (!apiKey) {
-      return res.status(500).json({ error: "ATTOM_API_KEY not set" });
+      console.error("ATTOM_API_KEY is not configured in environment variables.");
+      return res.status(500).json({ status: "error", message: "ATTOM_API_KEY not set" });
     }
 
     const endpoints = [
@@ -48,20 +54,24 @@ export default async function handler(req: any, res: any) {
       return null;
     }
 
-    // Attempt 1: Normalized Address
+    // Attempt 1: Normalized Address (Exactly as sent from UI)
     let property = await queryAttom(address1, address2);
 
-    // Attempt 2: Smart Retry (Mt -> Mount)
+    // Attempt 2: Smart Retry (Mt -> Mount) - Logic restricted to single retry
     if (!property && address1.toLowerCase().includes(" mt ")) {
       const retryAddress1 = address1.replace(/ mt /i, " Mount ");
       property = await queryAttom(retryAddress1, address2);
     }
 
     if (!property) {
-      return res.status(404).json({ error: "Property data unavailable. Enter details manually." });
+      return res.status(404).json({ 
+        status: "error", 
+        source: "attom", 
+        message: "Property data unavailable. Enter details manually." 
+      });
     }
 
-    // Improved Data Normalization
+    // Data Normalization for UI consumption
     const apn = property?.identifier?.apn || property?.identifier?.apnOrig || property?.parcel?.apn || null;
     const county = property?.area?.countyName || property?.area?.countrySecSubdName || null;
     const taxYear = property?.assessment?.tax?.taxYear || property?.tax?.taxYear || null;
@@ -81,6 +91,11 @@ export default async function handler(req: any, res: any) {
       normalizedSent: { address1, address2 }
     });
   } catch (e: any) {
-    return res.status(500).json({ error: "Internal Server Error", details: e.message });
+    console.error("Internal Server Error in ATTOM route:", e);
+    return res.status(500).json({ 
+      status: "error", 
+      message: "Internal Server Error", 
+      details: e.message 
+    });
   }
 }
