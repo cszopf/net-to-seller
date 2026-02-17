@@ -1,9 +1,10 @@
 
-import React, { useState } from 'react';
-import { HashRouter as Router, Routes, Route, useNavigate, Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { HashRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom';
 import CalculatorWizard from './components/CalculatorWizard';
 import ResultsPage from './components/ResultsPage';
 import AdminPanel from './components/AdminPanel';
+import LoginPage from './components/LoginPage';
 import Layout from './components/Layout';
 import { NetSheetData } from './types';
 import { INITIAL_DATA } from './constants';
@@ -50,15 +51,36 @@ const Home: React.FC = () => {
 
 const App: React.FC = () => {
   const [data, setData] = useState<NetSheetData>(INITIAL_DATA);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    // Check session storage on initial load
+    return sessionStorage.getItem('adminAuth') === 'true';
+  });
+
+  const handleLogin = () => {
+    setIsAuthenticated(true);
+    sessionStorage.setItem('adminAuth', 'true');
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    sessionStorage.removeItem('adminAuth');
+  };
 
   return (
     <Router>
-      <Layout>
+      <Layout isAuthenticated={isAuthenticated} onLogout={handleLogout}>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/calculate" element={<CalculatorWizard data={data} setData={setData} />} />
           <Route path="/results" element={<ResultsPage data={data} />} />
-          <Route path="/admin" element={<AdminPanel />} />
+          <Route 
+            path="/login" 
+            element={isAuthenticated ? <Navigate to="/admin" replace /> : <LoginPage onLogin={handleLogin} />} 
+          />
+          <Route 
+            path="/admin" 
+            element={isAuthenticated ? <AdminPanel /> : <Navigate to="/login" replace />} 
+          />
         </Routes>
       </Layout>
     </Router>

@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { NetSheetData, MortgagePayoff, OtherCost } from '../types';
 import { OHIO_COUNTIES, PROPERTY_TYPES } from '../constants';
@@ -12,6 +11,59 @@ interface Props {
 const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
   const [step, setStep] = useState(1);
   const navigate = useNavigate();
+  const autocompleteInputRef = useRef<HTMLInputElement>(null);
+  // Use 'any' for the ref type to avoid namespace errors when @types/google.maps is missing
+  const autocompleteRef = useRef<any>(null);
+
+  useEffect(() => {
+    // Cast window to any to safely access the google object provided by the Maps API script
+    if (step === 1 && autocompleteInputRef.current && (window as any).google) {
+      autocompleteRef.current = new (window as any).google.maps.places.Autocomplete(autocompleteInputRef.current, {
+        componentRestrictions: { country: 'us' },
+        fields: ['address_components', 'formatted_address'],
+        types: ['address']
+      });
+
+      autocompleteRef.current.addListener('place_changed', () => {
+        const place = autocompleteRef.current?.getPlace();
+        if (place && place.address_components) {
+          let streetNumber = '';
+          let route = '';
+          let city = '';
+          let state = '';
+          let zip = '';
+          let county = '';
+
+          for (const component of place.address_components) {
+            const types = component.types;
+            if (types.includes('street_number')) streetNumber = component.long_name;
+            if (types.includes('route')) route = component.long_name;
+            if (types.includes('locality')) city = component.long_name;
+            if (types.includes('administrative_area_level_1')) state = component.short_name;
+            if (types.includes('postal_code')) zip = component.long_name;
+            if (types.includes('administrative_area_level_2')) {
+              // Extract county name and strip " County" suffix
+              county = component.long_name.replace(' County', '').trim();
+            }
+          }
+
+          const fullAddress = `${streetNumber} ${route}`.trim();
+          
+          // Check if detected county is in our OHIO_COUNTIES list
+          const matchedCounty = OHIO_COUNTIES.find(c => c.toLowerCase() === county.toLowerCase()) || 'Other';
+
+          setData(prev => ({
+            ...prev,
+            address: place.formatted_address || fullAddress,
+            city,
+            state: state || 'OH',
+            zip,
+            county: matchedCounty
+          }));
+        }
+      });
+    }
+  }, [step, setData]);
 
   const updateData = (fields: Partial<NetSheetData>) => {
     setData(prev => ({ ...prev, ...fields }));
@@ -38,21 +90,6 @@ const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
   const updatePayoff = (id: string, fields: Partial<MortgagePayoff>) => {
     updateData({
       mortgagePayoffs: data.mortgagePayoffs.map(p => p.id === id ? { ...p, ...fields } : p)
-    });
-  };
-
-  const addOtherCost = () => {
-    const newCost: OtherCost = { id: crypto.randomUUID(), label: '', amount: 0 };
-    updateData({ otherCosts: [...data.otherCosts, newCost] });
-  };
-
-  const removeOtherCost = (id: string) => {
-    updateData({ otherCosts: data.otherCosts.filter(c => c.id !== id) });
-  };
-
-  const updateOtherCost = (id: string, fields: Partial<OtherCost>) => {
-    updateData({
-      otherCosts: data.otherCosts.map(c => c.id === id ? { ...c, ...fields } : c)
     });
   };
 
@@ -84,15 +121,19 @@ const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
               <h2 className="text-2xl font-display font-bold text-brand-primary">Property Basics</h2>
               <div className="grid grid-cols-1 gap-4">
-                <div>
+                <div className="relative">
                   <label className="block text-sm font-semibold text-slate-700 mb-1">Property Address</label>
                   <input 
+                    ref={autocompleteInputRef}
                     type="text" 
-                    placeholder="Enter full address"
+                    placeholder="Search address..."
                     className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-teal/20 focus:border-brand-teal outline-none transition-all"
                     value={data.address}
                     onChange={e => updateData({ address: e.target.value })}
                   />
+                  <div className="mt-2 flex space-x-2 text-[11px] text-slate-400 font-medium h-4">
+                    {data.city && <span>{data.city}, {data.state} {data.zip}</span>}
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -121,12 +162,12 @@ const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
                   <div className="flex items-center justify-between mb-4">
                     <div>
                       <label className="block text-sm font-bold text-slate-700">Sale Price Scenarios</label>
-                      <p className="text-xs text-slate-400">Enter up to 3 prices to compare net proceeds.</p>
+                      <p className="text-xs text-slate-400">Compare up to 3 different net scenarios.</p>
                     </div>
                     {!data.showComparisons && (
                       <button 
                         onClick={() => updateData({ showComparisons: true })}
-                        className="text-xs font-bold text-brand-primary bg-white border border-slate-200 px-3 py-1.5 rounded-lg hover:bg-slate-50 transition-colors"
+                        className="text-xs font-bold text-brand-primary bg-white border border-slate-200 px-3 py-1.5 rounded-lg hover:bg-slate-50 transition-colors shadow-sm"
                       >
                         + Add Scenarios
                       </button>
@@ -153,7 +194,7 @@ const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
                           <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 tracking-wider">Scenario B</label>
                           <input 
                             type="number" 
-                            placeholder="Optional"
+                            placeholder="Optional Price"
                             className="w-full p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-teal/10 outline-none font-semibold text-slate-700"
                             value={data.salePrice2 || ''}
                             onChange={e => updateData({ salePrice2: parseFloat(e.target.value) || 0 })}
@@ -164,14 +205,15 @@ const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
                             <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Scenario C</label>
                             <button 
                               onClick={() => updateData({ showComparisons: false, salePrice2: 0, salePrice3: 0 })}
-                              className="text-[9px] font-bold text-red-400 hover:text-red-500"
+                              className="text-[9px] font-bold text-red-500 hover:text-red-700 hover:underline uppercase tracking-tighter"
+                              title="Reset and hide price scenarios"
                             >
                               CLEAR ALL
                             </button>
                           </div>
                           <input 
                             type="number" 
-                            placeholder="Optional"
+                            placeholder="Optional Price"
                             className="w-full p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-teal/10 outline-none font-semibold text-slate-700"
                             value={data.salePrice3 || ''}
                             onChange={e => updateData({ salePrice3: parseFloat(e.target.value) || 0 })}
@@ -330,27 +372,69 @@ const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
 
           {step === 5 && (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <h2 className="text-2xl font-display font-bold text-brand-primary">Taxes, HOA & Misc</h2>
+              <h2 className="text-2xl font-display font-bold text-brand-primary">Closing & Title Fees</h2>
               
-              <div className="p-4 bg-brand-light/20 rounded-2xl border border-brand-light/30">
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <h3 className="text-sm font-bold text-brand-primary uppercase mb-4 tracking-wider">Title Insurance Details</h3>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-sm font-semibold text-slate-700">Homeowner's Policy (PR-1.1)</span>
+                      <p className="text-[10px] text-slate-400">Includes 15% rate differential</p>
+                    </div>
+                    <button 
+                      onClick={() => updateData({ isHomeownersPolicy: !data.isHomeownersPolicy })}
+                      className={`w-12 h-6 rounded-full transition-colors relative flex items-center px-1 ${data.isHomeownersPolicy ? 'bg-brand-primary' : 'bg-slate-300'}`}
+                    >
+                      <div className={`w-4 h-4 bg-white rounded-full shadow transform transition-transform ${data.isHomeownersPolicy ? 'translate-x-6' : 'translate-x-0'}`} />
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-200">
+                    <div>
+                      <span className="text-sm font-semibold text-slate-700">Qualify for Reissue (PR-4)</span>
+                      <p className="text-[10px] text-slate-400">30% credit on prior policy amount</p>
+                    </div>
+                    <button 
+                      onClick={() => updateData({ isReissueRate: !data.isReissueRate })}
+                      className={`w-12 h-6 rounded-full transition-colors relative flex items-center px-1 ${data.isReissueRate ? 'bg-brand-primary' : 'bg-slate-300'}`}
+                    >
+                      <div className={`w-4 h-4 bg-white rounded-full shadow transform transition-transform ${data.isReissueRate ? 'translate-x-6' : 'translate-x-0'}`} />
+                    </button>
+                  </div>
+
+                  {data.isReissueRate && (
+                    <div className="animate-in slide-in-from-top-2 duration-300">
+                      <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Prior Policy Amount ($)</label>
+                      <input 
+                        type="number" 
+                        className="w-full p-2 border border-slate-200 rounded-lg text-sm font-semibold"
+                        value={data.priorPolicyAmount || ''}
+                        onChange={e => updateData({ priorPolicyAmount: parseFloat(e.target.value) || 0 })}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="p-4 bg-brand-light/10 rounded-2xl border border-brand-light/30">
                 <label className="block text-sm font-semibold text-brand-primary mb-3">Property Taxes</label>
                 <div className="flex space-x-2 mb-4">
                   <button 
                     onClick={() => updateData({ taxInputMethod: 'annual' })}
-                    className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${data.taxInputMethod === 'annual' ? 'bg-brand-primary text-white' : 'bg-white text-slate-400'}`}
+                    className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${data.taxInputMethod === 'annual' ? 'bg-brand-primary text-white' : 'bg-white text-slate-400 border'}`}
                   >
                     Annual
                   </button>
                   <button 
                     onClick={() => updateData({ taxInputMethod: 'monthly' })}
-                    className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${data.taxInputMethod === 'monthly' ? 'bg-brand-primary text-white' : 'bg-white text-slate-400'}`}
+                    className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${data.taxInputMethod === 'monthly' ? 'bg-brand-primary text-white' : 'bg-white text-slate-400 border'}`}
                   >
                     Monthly
                   </button>
                 </div>
                 <input 
                   type="number" 
-                  placeholder={data.taxInputMethod === 'annual' ? "Annual tax amount" : "Monthly escrow amount"}
                   className="w-full p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-teal/20"
                   value={data.taxValue || ''}
                   onChange={e => updateData({ taxValue: parseFloat(e.target.value) || 0 })}
@@ -359,52 +443,13 @@ const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Monthly HOA Dues</label>
-                  <input 
-                    type="number" 
-                    className="w-full p-3 border border-slate-200 rounded-xl outline-none"
-                    value={data.hoaMonthly || ''}
-                    onChange={e => updateData({ hoaMonthly: parseFloat(e.target.value) || 0 })}
-                  />
+                  <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Monthly HOA</label>
+                  <input type="number" className="w-full p-3 border border-slate-200 rounded-xl outline-none" value={data.hoaMonthly || ''} onChange={e => updateData({ hoaMonthly: parseFloat(e.target.value) || 0 })} />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase mb-1">HOA Transfer Fee</label>
-                  <input 
-                    type="number" 
-                    className="w-full p-3 border border-slate-200 rounded-xl outline-none"
-                    value={data.hoaTransferFee || ''}
-                    onChange={e => updateData({ hoaTransferFee: parseFloat(e.target.value) || 0 })}
-                  />
+                  <label className="block text-xs font-bold text-slate-400 uppercase mb-1">HOA Trans Fee</label>
+                  <input type="number" className="w-full p-3 border border-slate-200 rounded-xl outline-none" value={data.hoaTransferFee || ''} onChange={e => updateData({ hoaTransferFee: parseFloat(e.target.value) || 0 })} />
                 </div>
-              </div>
-
-              <div className="space-y-3">
-                <label className="block text-sm font-semibold text-slate-700">Other Closing Costs</label>
-                {data.otherCosts.map((cost) => (
-                  <div key={cost.id} className="flex space-x-2">
-                    <input 
-                      type="text" 
-                      placeholder="Label"
-                      className="flex-[2] p-2 border border-slate-200 rounded-lg text-sm"
-                      value={cost.label}
-                      onChange={e => updateOtherCost(cost.id, { label: e.target.value })}
-                    />
-                    <input 
-                      type="number" 
-                      placeholder="$"
-                      className="flex-1 p-2 border border-slate-200 rounded-lg text-sm"
-                      value={cost.amount || ''}
-                      onChange={e => updateOtherCost(cost.id, { amount: parseFloat(e.target.value) || 0 })}
-                    />
-                    <button onClick={() => removeOtherCost(cost.id)} className="text-red-400 p-2">×</button>
-                  </div>
-                ))}
-                <button 
-                  onClick={addOtherCost}
-                  className="text-brand-primary text-xs font-bold hover:underline"
-                >
-                  + ADD OTHER COST
-                </button>
               </div>
             </div>
           )}
@@ -413,18 +458,9 @@ const CalculatorWizard: React.FC<Props> = ({ data, setData }) => {
         {/* Navigation Buttons */}
         <div className="mt-10 flex space-x-3">
           {step > 1 && (
-            <button 
-              onClick={handleBack}
-              className="flex-1 py-4 border border-slate-200 text-slate-500 font-display font-bold rounded-2xl hover:bg-slate-50 transition-all"
-            >
-              Back
-            </button>
+            <button onClick={handleBack} className="flex-1 py-4 border border-slate-200 text-slate-500 font-display font-bold rounded-2xl hover:bg-slate-50 transition-all">Back</button>
           )}
-          <button 
-            onClick={handleNext}
-            disabled={!isValid()}
-            className={`flex-[2] py-4 font-display font-bold rounded-2xl transition-all shadow-lg shadow-brand-teal/20 ${isValid() ? 'bg-brand-teal text-white hover:bg-[#58b7b4]' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
-          >
+          <button onClick={handleNext} disabled={!isValid()} className={`flex-[2] py-4 font-display font-bold rounded-2xl transition-all shadow-lg shadow-brand-teal/20 ${isValid() ? 'bg-brand-teal text-white hover:bg-[#58b7b4]' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}>
             {step === 5 ? 'Generate Net Sheet' : 'Next Step'}
           </button>
         </div>

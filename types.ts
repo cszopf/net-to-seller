@@ -40,6 +40,10 @@ export interface NetSheetData {
   taxInputMethod: 'annual' | 'monthly';
   taxValue: number;
   otherCosts: OtherCost[];
+  // New Title Fields
+  isHomeownersPolicy: boolean;
+  isReissueRate: boolean;
+  priorPolicyAmount: number;
 }
 
 export interface FeeSchedule {
@@ -56,6 +60,8 @@ export interface CalculationResult {
   totalPayoffs: number;
   totalCredits: number;
   transferTax: number;
+  titlePremium: number;
+  cplFee: number;
   closingCosts: number;
   taxProration: number;
   hoaProration: number;

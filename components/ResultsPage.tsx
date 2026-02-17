@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { NetSheetData, CalculationResult } from '../types';
 import { calculateNetSheet } from '../services/calcLogic';
-import { DEFAULT_FEE_SCHEDULE } from '../constants';
+import { DEFAULT_FEE_SCHEDULE, COUNTY_TRANSFER_TAX_RATES } from '../constants';
 
 const ResultsPage: React.FC<{ data: NetSheetData }> = ({ data }) => {
   const navigate = useNavigate();
@@ -22,6 +22,8 @@ const ResultsPage: React.FC<{ data: NetSheetData }> = ({ data }) => {
 
   const formatCurrency = (val: number) => 
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
+
+  const currentCountyRate = COUNTY_TRANSFER_TAX_RATES[data.county] || COUNTY_TRANSFER_TAX_RATES['Other'];
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-10">
@@ -117,7 +119,19 @@ const ResultsPage: React.FC<{ data: NetSheetData }> = ({ data }) => {
             <div className="space-y-3">
               <Row label="Agent Commissions" value={activeResult.totalCommission} isNegative />
               {activeResult.totalPayoffs > 0 && <Row label="Mortgage Payoffs" value={activeResult.totalPayoffs} isNegative />}
-              <Row label="Closing Costs & Fees" value={activeResult.closingCosts} isNegative tooltip="Includes settlement, recording, and transfer tax." />
+              
+              <div className="py-2 border-y border-slate-50">
+                <Row label="Title Insurance Premium" value={activeResult.titlePremium} isNegative tooltip={`PR-1 Rate Tiered. ${data.isHomeownersPolicy ? 'Includes 15% Homeowners differential (PR-1.1).' : ''} ${data.isReissueRate ? 'Applied PR-4 Reissue credit.' : ''}`} />
+                <Row label="Closing Protection (CPL)" value={activeResult.cplFee} isNegative tooltip="Ohio Mandated Closing Protection Coverage for Seller." />
+                <Row label="Title Company Fees" value={activeResult.closingCosts - activeResult.titlePremium - activeResult.cplFee - activeResult.transferTax} isNegative tooltip="Settlement, recording, doc prep, and release tracking." />
+              </div>
+
+              <Row 
+                label={`County Transfer Tax (${data.county})`} 
+                value={activeResult.transferTax} 
+                isNegative 
+                tooltip={`Based on ${data.county} rate of $${currentCountyRate.toFixed(2)} per $1,000 of sale price.`} 
+              />
               {activeResult.totalCredits > 0 && <Row label="Seller Credits/Concessions" value={activeResult.totalCredits} isNegative />}
               {activeResult.taxProration > 0 && <Row label="Estimated Tax Proration" value={activeResult.taxProration} isNegative tooltip="Taxes are paid in arrears in Ohio. This is your share through closing." />}
               {activeResult.otherCostsTotal > 0 && <Row label="Other Adjustments" value={activeResult.otherCostsTotal} isNegative />}
@@ -143,7 +157,7 @@ const ResultsPage: React.FC<{ data: NetSheetData }> = ({ data }) => {
           </section>
         </div>
 
-        {/* Print Comparison Table */}
+        {/* Comparison Table */}
         {prices.length > 1 && (
           <div className="hidden print:block mt-12">
             <h3 className="text-lg font-display font-bold text-brand-primary mb-4 border-b border-slate-100 pb-2 uppercase tracking-widest">Scenario Comparison Summary</h3>
@@ -156,20 +170,20 @@ const ResultsPage: React.FC<{ data: NetSheetData }> = ({ data }) => {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 <tr>
-                  <td className="py-4 font-semibold">Sale Price</td>
-                  {prices.map((p, idx) => <td key={idx} className="py-4 text-right font-bold">{formatCurrency(p)}</td>)}
+                  <td className="py-4 font-semibold text-sm">Sale Price</td>
+                  {prices.map((p, idx) => <td key={idx} className="py-4 text-right font-bold text-sm">{formatCurrency(p)}</td>)}
                 </tr>
                 <tr className="bg-blue-50/50">
-                  <td className="py-4 font-bold text-brand-primary">Net Proceeds</td>
-                  {results.map((res, idx) => <td key={idx} className="py-4 text-right font-bold text-brand-primary">{formatCurrency(res.netProceeds)}</td>)}
+                  <td className="py-4 font-bold text-brand-primary text-sm">Net Proceeds</td>
+                  {results.map((res, idx) => <td key={idx} className="py-4 text-right font-bold text-brand-primary text-sm">{formatCurrency(res.netProceeds)}</td>)}
                 </tr>
                 <tr>
-                  <td className="py-3 text-slate-500 text-sm">Agent Commissions</td>
-                  {results.map((res, idx) => <td key={idx} className="py-3 text-right text-slate-500 text-sm">{formatCurrency(res.totalCommission)}</td>)}
+                  <td className="py-3 text-slate-500 text-xs">Title Insurance & CPL</td>
+                  {results.map((res, idx) => <td key={idx} className="py-3 text-right text-slate-500 text-xs">{formatCurrency(res.titlePremium + res.cplFee)}</td>)}
                 </tr>
                 <tr>
-                  <td className="py-3 text-slate-500 text-sm">Total Closing Costs</td>
-                  {results.map((res, idx) => <td key={idx} className="py-3 text-right text-slate-500 text-sm">{formatCurrency(res.closingCosts)}</td>)}
+                  <td className="py-3 text-slate-500 text-xs">Commissions</td>
+                  {results.map((res, idx) => <td key={idx} className="py-3 text-right text-slate-500 text-xs">{formatCurrency(res.totalCommission)}</td>)}
                 </tr>
               </tbody>
             </table>
@@ -178,7 +192,7 @@ const ResultsPage: React.FC<{ data: NetSheetData }> = ({ data }) => {
 
         <div className="mt-16 text-center space-y-4">
           <p className="text-[10px] text-slate-400 leading-relaxed italic max-w-2xl mx-auto">
-            Estimates are for illustration only and may vary based on lender requirements, contract terms, prorations, and county-specific charges. Final amounts will be confirmed by your World Class Title escrow officer. This tool does not constitute a binding quote.
+            Estimates are for illustration only and may vary based on lender requirements, contract terms, prorations, and county-specific charges. Final amounts will be confirmed by your World Class Title escrow officer. Rates based on OTIRB Manual (March 1, 2026). This tool does not constitute a binding quote.
           </p>
           <div className="no-print pt-6">
             <Link to="/" className="text-brand-primary font-bold hover:underline">Return Home</Link>
@@ -192,12 +206,12 @@ const ResultsPage: React.FC<{ data: NetSheetData }> = ({ data }) => {
 const Row: React.FC<{ label: string; value: number; isNegative?: boolean; tooltip?: string }> = ({ label, value, isNegative, tooltip }) => (
   <div className="flex justify-between items-center group relative">
     <div className="flex items-center">
-      <span className="text-slate-600 font-medium">{label}</span>
+      <span className="text-slate-600 font-medium text-sm">{label}</span>
       {tooltip && (
         <div className="ml-2 w-4 h-4 bg-slate-200 text-[10px] flex items-center justify-center rounded-full text-slate-500 cursor-help no-print" title={tooltip}>i</div>
       )}
     </div>
-    <span className={`font-bold ${isNegative ? 'text-slate-900' : 'text-green-600'}`}>
+    <span className={`font-bold text-sm ${isNegative ? 'text-slate-900' : 'text-green-600'}`}>
       {isNegative ? '-' : ''}{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value)}
     </span>
   </div>

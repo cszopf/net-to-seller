@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -9,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&family=Nunito+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDUsGtDgtQE2rbUlZx8NJbvge2RdalVQj8&libraries=places"></script>
   <script>
     tailwind.config = {
       theme: {
@@ -33,6 +33,25 @@
     @media print {
       .no-print { display: none !important; }
       body { background: white !important; }
+    }
+    /* Style the Google Autocomplete dropdown to match the app's aesthetic */
+    .pac-container {
+      border-radius: 1rem;
+      border: 1px solid #f1f5f9;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+      margin-top: 4px;
+      font-family: 'Nunito Sans', sans-serif;
+    }
+    .pac-item {
+      padding: 10px 15px;
+      cursor: pointer;
+    }
+    .pac-item:hover {
+      background-color: #f8fafc;
+    }
+    .pac-item-query {
+      font-size: 14px;
+      color: #004EA8;
     }
   </style>
 <script type="importmap">

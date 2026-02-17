@@ -38,11 +38,25 @@ export const INITIAL_DATA: NetSheetData = {
   taxInputMethod: 'annual',
   taxValue: 0,
   otherCosts: [],
+  isHomeownersPolicy: true, // Default to premium product
+  isReissueRate: false,
+  priorPolicyAmount: 0,
 };
 
 export const OHIO_COUNTIES = [
   'Franklin', 'Delaware', 'Licking', 'Fairfield', 'Union', 'Madison', 'Pickaway', 'Other'
 ];
+
+export const COUNTY_TRANSFER_TAX_RATES: Record<string, number> = {
+  'Franklin': 2.0,
+  'Delaware': 3.0,
+  'Licking': 4.0,
+  'Fairfield': 4.0,
+  'Union': 4.0,
+  'Madison': 3.0,
+  'Pickaway': 3.0,
+  'Other': 4.0
+};
 
 export const PROPERTY_TYPES = [
   'Single Family', 'Condo', 'Townhome', 'Multi-family (2-4)', 'Land'
@@ -54,5 +68,15 @@ export const DEFAULT_FEE_SCHEDULE: FeeSchedule = {
   docPrepFee: 75,
   courierFee: 40,
   releaseTrackingFee: 35,
-  transferTaxRate: 3.0, // per $1000 in Central Ohio typically ranges 1-4
+  transferTaxRate: 2.0, // Default to Franklin County rate
 };
+
+// PR-1 Rate Tiers per $1,000
+export const OHIO_TITLE_TIERS = [
+  { limit: 250000, rate: 5.80 },
+  { limit: 500000, rate: 4.10 },
+  { limit: 1000000, rate: 3.20 },
+  { limit: 5000000, rate: 3.10 },
+  { limit: 10000000, rate: 2.90 },
+  { limit: Infinity, rate: 2.60 }
+];
