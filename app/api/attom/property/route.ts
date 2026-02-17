@@ -37,10 +37,10 @@ export async function POST(req: Request) {
 
     const data = await resp.json();
     
-    // Defensive normalization
+    // Normalize data as requested
     const p = data?.property?.[0] ?? data?.property ?? null;
     if (!p) {
-        return NextResponse.json({ error: "Property not found" }, { status: 404 });
+        return NextResponse.json({ error: "No property found at this address", data: null }, { status: 404 });
     }
 
     const apn = p?.identifier?.apn || p?.identifier?.apnOrig || p?.parcel?.apn || null;

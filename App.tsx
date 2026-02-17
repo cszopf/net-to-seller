@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom';
 import CalculatorWizard from './components/CalculatorWizard';
 import ResultsPage from './components/ResultsPage';
@@ -15,11 +15,9 @@ const Home: React.FC = () => {
       <h1 className="text-4xl md:text-5xl font-display font-bold text-brand-primary mb-4">
         Net to Seller Calculator
       </h1>
-      <p className="text-lg md:text-xl text-slate-600 mb-10 max-w-2xl">
-        Get an estimated breakdown of your closing costs and net proceeds in under 60 seconds.
-      </p>
 
-      <div className="mb-12">
+      {/* Button moved up as requested */}
+      <div className="mb-10 mt-4">
         <Link 
           to="/calculate"
           className="bg-brand-teal hover:bg-[#58b7b4] text-white px-10 py-5 rounded-full text-lg font-display font-bold shadow-xl transition-transform hover:scale-105 inline-block"
@@ -28,8 +26,12 @@ const Home: React.FC = () => {
         </Link>
       </div>
 
+      <p className="text-lg md:text-xl text-slate-600 mb-10 max-w-2xl">
+        Get an estimated breakdown of your closing costs and net proceeds in under 60 seconds.
+      </p>
+
       <div className="bg-blue-50 border-l-4 border-brand-primary p-6 mb-16 text-left rounded-r-2xl max-w-xl mx-auto shadow-sm">
-        <p className="text-sm text-brand-primary font-bold tracking-widest mb-1">WORLD CLASS ACCURACY</p>
+        <p className="text-sm text-brand-primary font-bold tracking-widest mb-1 uppercase">World Class Accuracy</p>
         <p className="text-sm text-slate-700 leading-relaxed">
           Estimates are based on typical Ohio closing cost ranges. Your escrow officer will confirm final numbers during the transaction.
         </p>
