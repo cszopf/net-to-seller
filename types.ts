@@ -19,6 +19,13 @@ export interface NetSheetData {
   county: string;
   parcelId: string;
   propertyType: string;
+  sellerName: string;
+  beds?: number;
+  baths?: number;
+  sqft?: number;
+  yearBuilt?: number;
+  lotSize?: number;
+  isHomestead?: boolean;
   salePrice: number;
   salePrice2?: number;
   salePrice3?: number;

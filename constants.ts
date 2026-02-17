@@ -17,6 +17,8 @@ export const INITIAL_DATA: NetSheetData = {
   county: 'Franklin',
   parcelId: '',
   propertyType: 'Single Family',
+  // Fix: Added missing required sellerName property
+  sellerName: '',
   salePrice: 0,
   salePrice2: 0,
   salePrice3: 0,
